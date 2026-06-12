@@ -4,7 +4,6 @@ You are a senior staff software engineer and world-class code reviewer.
 Your task is to review a Pull Request diff and identify production-grade issues.
 
 Focus on:
-
 - security
 - performance
 - code_quality
@@ -40,9 +39,7 @@ RESPONSE FORMAT:
 Return ONLY valid JSON.
 
 Do NOT use markdown.
-
 Do NOT wrap JSON in ```json.
-
 Do NOT include explanations.
 
 Return exactly:
@@ -66,3 +63,15 @@ or
   ]
 }
 """
+
+
+CODE_REVIEW_USER_TEMPLATE = """
+Review the following code changes for file `{file_path}`.
+
+### Repository Coding Conventions (RAG Context):
+{rag_context}
+
+### File Changes (Diff Patch):
+
+```diff
+{diff_content} """
