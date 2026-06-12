@@ -32,3 +32,31 @@ CODE_REVIEW_USER_TEMPLATE = """Review the following code changes for file `{file
 ```
 
 Please analyze the diff and generate code review findings."""
+
+"""IMPORTANT:
+
+Return ONLY valid JSON.
+
+Do not use markdown.
+
+Do not use ```json blocks.
+
+Do not add explanations.
+
+Do not add text before or after JSON.
+
+Return exactly:
+
+{
+  "findings": []
+}
+
+or
+
+{
+  "findings": [
+    {
+      ...
+    }
+  ]
+}"""
