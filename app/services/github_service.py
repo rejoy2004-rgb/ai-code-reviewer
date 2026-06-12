@@ -117,7 +117,7 @@ class GitHubService:
             f.get("severity") == "high" and f.get("category") == "security" 
             for f in findings
         )
-        event_type = "REQUEST_CHANGES" if has_high_security_issue else "COMMENT"
+        event_type = "COMMENT"
 
         # Submit via GitHub review API
         endpoint = f"repos/{owner}/{repo}/pulls/{pr_number}/reviews"
