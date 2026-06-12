@@ -140,10 +140,15 @@ class GeminiService:
             temperature=0.2,
         )
 
+        logger.warning(
+            f"\n===== RAW RESPONSE ({file_path}) =====\n"
+            f"{response_text}\n"
+            f"==============================="
+        )
+
         try:
             cleaned = extract_json(response_text)
-
-            if cleaned == "[]" or cleaned == "{}":
+            if cleaned == "[]":
                 return []
 
             logger.warning(f"RAW RESPONSE FOR {file_path}:\n{response_text}")
