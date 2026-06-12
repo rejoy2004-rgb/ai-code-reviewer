@@ -1,0 +1,13 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - CHROMADB_DIR=/app/data/chromadb
+      - DATABASE_URL=sqlite:////app/data/reviews.db
+    restart: unless-stopped
