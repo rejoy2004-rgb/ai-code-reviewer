@@ -1,10 +1,5 @@
 # test_security.py
 
-password = "admin123"
+password = "super-secret-password"
 
-user_input = input("command: ")
-
-eval(user_input)
-
-import os
-os.system(user_input)
+print(password)
