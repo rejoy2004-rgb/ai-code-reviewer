@@ -21,10 +21,15 @@ class GitHubAPIException(Exception):
 class GitHubClient:
     def __init__(self, token: Optional[str] = None):
         self.token = token or settings.GITHUB_TOKEN or os.environ.get("GITHUB_TOKEN", "")
+        if not self.token or not self.token.strip():
+            raise ValueError(
+                "GITHUB_TOKEN is not set or is empty. Please set the Repository Secret "
+                "named 'GITHUB_TOKEN' (or pass standard github.token) in your GitHub repository."
+            )
         self.base_url = "https://api.github.com"
         self.headers = {
             "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {self.token}",
+            "Authorization": f"Bearer {self.token.strip()}",
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "FastAPI-PR-Reviewer-Agent"
         }

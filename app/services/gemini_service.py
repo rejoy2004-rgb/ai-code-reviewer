@@ -77,8 +77,15 @@ class GeminiService:
         user_prompt: str,
         temperature: float = 0.2,
     ) -> str:
+        api_key = settings.OPENROUTER_API_KEY
+        if not api_key or not api_key.strip():
+            raise ValueError(
+                "OPENROUTER_API_KEY is not set or is empty. Please set it as a Repository Secret "
+                "named 'OPENROUTER_API_KEY' in your GitHub repository settings under Settings -> "
+                "Secrets and variables -> Actions."
+            )
         headers = {
-            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {api_key.strip()}",
             "Content-Type": "application/json",
         }
 

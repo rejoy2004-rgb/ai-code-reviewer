@@ -49,6 +49,7 @@ jobs:
           import asyncio
           import json
           import os
+          import sys
           from app.workflows.pr_workflow import review_workflow
 
           # Read GitHub Actions event payload file
@@ -66,5 +67,8 @@ jobs:
               'status': 'pending'
           }
 
-          asyncio.run(review_workflow.ainvoke(initial_state))
+          final_state = asyncio.run(review_workflow.ainvoke(initial_state))
+          if final_state.get('status') == 'failed':
+              print('Workflow failed! Errors:', final_state.get('errors'))
+              sys.exit(1)
           "
