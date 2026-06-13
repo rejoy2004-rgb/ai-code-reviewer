@@ -19,6 +19,7 @@ print("testing AI reviewer")
 try:
     init_db()
     print("starting server")
+    print("review trigger")
     logger.info("Database initialized successfully.")
 except Exception as e:
     logger.error(f"Database initialization failed: {e}")
