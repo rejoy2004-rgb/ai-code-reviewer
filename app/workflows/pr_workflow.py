@@ -254,7 +254,7 @@ async def retrieve_repository_context_node(state: PRReviewState) -> Dict[str, An
 
 async def review_code_node(state: PRReviewState) -> Dict[str, Any]:
     """
-    Batches modified files and runs reviews in parallel, throttled to respect API limits.
+    Batches modified files and runs reviews sequentially with a delay to respect strict free API rate limits.
     """
     logger.info("Node: review_code")
     if state.get("status") in ("failed", "skipped"):
@@ -264,26 +264,27 @@ async def review_code_node(state: PRReviewState) -> Dict[str, Any]:
         diff_map = state["diff_map"]
         rag_contexts = state.get("rag_contexts", {})
         
-        tasks = []
         file_paths = list(diff_map.keys())
+        results = []
 
-        # Review files concurrently with a limit of 2 parallel requests to respect OpenRouter rate limits
-        semaphore = asyncio.Semaphore(2)
-
-        async def sem_review(f_path, f_patch, f_context):
-            async with semaphore:
-                return await gemini_service.review_file_diff(f_path, f_patch, f_context)
-
-        for file_path in file_paths:
+        # Review files sequentially with a 6-second sleep between requests
+        # to respect OpenRouter free tier rate limits (often 10-20 RPM)
+        for idx, file_path in enumerate(file_paths):
             patch = next((f.get("patch") for f in state["changed_files"] if f.get("filename") == file_path), None)
             if patch:
                 context = rag_contexts.get(file_path, "")
-                tasks.append(
-                    sem_review(file_path, patch, context)
-                )
+                logger.info(f"Reviewing file sequential ({idx+1}/{len(file_paths)}): {file_path}")
+                try:
+                    res = await gemini_service.review_file_diff(file_path, patch, context)
+                    results.append(res)
+                except Exception as e:
+                    logger.error(f"Gemini failed reviewing {file_path}: {e}")
+                    results.append(e)
+                
+                # Sleep between files to respect rate limits (except for the last file)
+                if idx < len(file_paths) - 1:
+                    await asyncio.sleep(6.0)
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
         all_findings = []
         for idx, res in enumerate(results):
             if isinstance(res, Exception):
