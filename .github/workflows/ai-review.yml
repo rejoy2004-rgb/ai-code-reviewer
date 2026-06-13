@@ -1,7 +1,7 @@
 name: AI Pull Request Reviewer
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 permissions:
@@ -42,7 +42,7 @@ jobs:
       - name: Run AI Reviewer Workflow
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_WEBHOOK_SECRET: "github_actions_dummy_secret"
         run: |
           python -c "
@@ -72,3 +72,4 @@ jobs:
               print('Workflow failed! Errors:', final_state.get('errors'))
               sys.exit(1)
           "
+
