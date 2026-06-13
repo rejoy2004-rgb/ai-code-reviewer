@@ -254,7 +254,7 @@ async def retrieve_repository_context_node(state: PRReviewState) -> Dict[str, An
 
 async def review_code_node(state: PRReviewState) -> Dict[str, Any]:
     """
-    Batches modified files and runs Gemini reviews in parallel.
+    Batches modified files and runs reviews in parallel, throttled to respect API limits.
     """
     logger.info("Node: review_code")
     if state.get("status") in ("failed", "skipped"):
@@ -267,13 +267,19 @@ async def review_code_node(state: PRReviewState) -> Dict[str, Any]:
         tasks = []
         file_paths = list(diff_map.keys())
 
-        # Review files concurrently
+        # Review files concurrently with a limit of 2 parallel requests to respect OpenRouter rate limits
+        semaphore = asyncio.Semaphore(2)
+
+        async def sem_review(f_path, f_patch, f_context):
+            async with semaphore:
+                return await gemini_service.review_file_diff(f_path, f_patch, f_context)
+
         for file_path in file_paths:
             patch = next((f.get("patch") for f in state["changed_files"] if f.get("filename") == file_path), None)
             if patch:
                 context = rag_contexts.get(file_path, "")
                 tasks.append(
-                    gemini_service.review_file_diff(file_path, patch, context)
+                    sem_review(file_path, patch, context)
                 )
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
