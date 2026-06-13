@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # OpenRouter Settings
     # =========================
     OPENROUTER_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "deepseek/deepseek-chat-v3"
+    OPENROUTER_MODEL: str = "google/gemini-2.5-flash:free"
 
     # =========================
     # Embeddings (Local)
