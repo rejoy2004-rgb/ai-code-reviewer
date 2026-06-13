@@ -1,0 +1,69 @@
+name: AI Pull Request Reviewer
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for RAG and diffs
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Index Codebase (RAG Initialization)
+        run: |
+          python -c "
+          import asyncio
+          from pathlib import Path
+          from app.rag.indexer import RepositoryIndexer
+          indexer = RepositoryIndexer()
+          asyncio.run(indexer.index_repository('${{ github.repository }}', Path('.')))
+          "
+
+      - name: Run AI Reviewer Workflow
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_WEBHOOK_SECRET: "github_actions_dummy_secret"
+        run: |
+          python -c "
+          import asyncio
+          import json
+          import os
+          from app.workflows.pr_workflow import review_workflow
+
+          # Read GitHub Actions event payload file
+          with open(os.environ['GITHUB_EVENT_PATH'], 'r') as f:
+              payload = json.load(f)
+
+          # In GitHub Actions, pull_request details are already root-level
+          # but we ensure structure matches standard webhook payloads
+          if 'pull_request' not in payload:
+              raise ValueError('Not a pull_request event payload')
+
+          initial_state = {
+              'webhook_payload': payload,
+              'errors': [],
+              'status': 'pending'
+          }
+
+          asyncio.run(review_workflow.ainvoke(initial_state))
+          "
