@@ -1,15 +1,15 @@
 # 🤖 AI-Powered GitHub Pull Request Reviewer
 
-A production-grade, agentic code review assistant built using **FastAPI**, **LangGraph**, **Google Gemini 2.5 Flash**, **ChromaDB (RAG)**, and **GitHub REST & Webhooks APIs**.
+A production-grade, agentic code review assistant built using **FastAPI**, **LangGraph**, **OpenRouter (DeepSeek V3 / Gemini)**, local **SentenceTransformers (RAG)**, **ChromaDB**, and **GitHub REST & Webhooks APIs**.
 
-This system automatically reviews GitHub pull requests upon creation or updates, performing security, performance, maintainability, and coding standards validation. By utilizing Retrieval-Augmented Generation (RAG) over the existing repository codebase, it ensures that suggestions align with established codebase patterns and styles.
+This system automatically reviews GitHub pull requests upon creation or updates. It performs security, performance, maintainability, and coding standards validation. By utilizing Retrieval-Augmented Generation (RAG) over the repository codebase using local vector embeddings, it ensures that AI recommendations align with your project's established conventions (e.g. suggesting your custom loggers over raw `print` statements).
 
 ---
 
 ## 🏗️ Architecture & Data Flow
 
-### Workflow Architecture
-The system orchestrates review tasks using **LangGraph** as a state machine:
+### Workflow State Machine (LangGraph)
+The review pipeline is modeled as an advanced state graph using **LangGraph**, enabling graceful error fallback, skips, and complex data routing:
 
 ```mermaid
 graph TD
@@ -18,10 +18,10 @@ graph TD
     B -->|Ignored Event| END([End])
     C --> D[Fetch Changed Files & Diffs]
     D --> E[Retrieve Codebase Context via ChromaDB RAG]
-    E --> F[Review Code with Gemini Flash]
-    F --> G[Deduplicate & Filter Findings]
+    E --> F[Review Code with OpenRouter]
+    F --> G[Deduplicate & Filter Findings via SQLite Memory]
     G --> H[Generate Final PR Summary & Scores]
-    H --> I[Post Unified Review to GitHub]
+    H --> I[Post Unified Review to GitHub LEFT & RIGHT sides]
     I --> J[Post Slack Alert]
     J --> K[Store Review Memory in SQLite]
     K --> END
@@ -36,8 +36,8 @@ sequenceDiagram
     actor Developer
     participant GitHub
     participant FastAPI App
-    participant ChromaDB (RAG)
-    participant Gemini API
+    participant ChromaDB (Local RAG)
+    participant OpenRouter API
     participant Slack
 
     Developer->>GitHub: Open / Update Pull Request
@@ -49,13 +49,13 @@ sequenceDiagram
         Note over FastAPI App: Async Review Process (LangGraph)
         FastAPI App->>GitHub: Fetch PR metadata & changed file diffs
         GitHub-->>FastAPI App: Returns files, diff patches & metadata
-        FastAPI App->>ChromaDB (RAG): Query similar code patterns in repository
-        ChromaDB (RAG)-->>FastAPI App: Returns codebase references & conventions
-        FastAPI App->>Gemini API: Run reviews with Structured JSON output
-        Gemini API-->>FastAPI App: returns structured line-by-line issues
-        FastAPI App->>Gemini API: Request PR summary review & scoring
-        Gemini API-->>FastAPI App: returns markdown summary & scores
-        FastAPI App->>GitHub: POST Review comments & summary block
+        FastAPI App->>ChromaDB (Local RAG): Query similar code patterns (SentenceTransformer)
+        ChromaDB (Local RAG)-->>FastAPI App: Returns local code references & conventions
+        FastAPI App->>OpenRouter API: Run reviews with Structured JSON output
+        OpenRouter API-->>FastAPI App: returns structured line-by-line issues
+        FastAPI App->>OpenRouter API: Request PR summary review & scoring
+        OpenRouter API-->>FastAPI App: returns markdown summary & scores
+        FastAPI App->>GitHub: POST Review comments (LEFT/RIGHT sides) & summary block
         FastAPI App->>Slack: POST summary notification (Webhook)
         FastAPI App->>FastAPI App: Save run stats & feedback to SQLite database
     end
@@ -63,15 +63,15 @@ sequenceDiagram
 
 ---
 
-## 🌟 Advanced Features
+## 🌟 Core Features
 
-1. **Structured AI Review Findings**: Enforces strict JSON return schema from Gemini to retrieve precise lines, issue categories, severity levels, and code recommendations.
-2. **Repository-Aware RAG**: Indexes local repository files into ChromaDB vector collections. Queries conventions dynamically to compare new code against existing patterns (e.g., suggesting established loggers over `print`).
-3. **Draft Review Batching**: Submits all inline comments and the overall summary as a single atomic GitHub Review, optimizing API usage and avoiding developer notification fatigue.
-4. **Interactive Dashboard & Analytics**: A beautiful landing page serving system stats, setup configurations, and historical review data.
-5. **Developer Feedback Loop Memory**: Subscribes to developer comments on reviews to record whether feedback was accepted, rejected, or disputed. Adapts future review filters accordingly.
-6. **PR Risk Scoring**: Provides a 1-10 risk score estimating impact on production.
-7. **Slack Webhook Notifications**: Sends rich block alerts detailing scores and issue summaries to Slack teams.
+1. **OpenRouter Integration**: Configured to run on top-tier open models like `deepseek/deepseek-chat-v3` or Gemini via OpenRouter.
+2. **Local, High-Performance RAG**: Indexes repository files into ChromaDB using a CPU-friendly local embedding model (`sentence-transformers/all-MiniLM-L6-v2`). Runs entirely offline without using API key quotas.
+3. **Dual-Side Diff Commenting**: Analyzes unified Git patches to place comments on the correct side of the diff. Correctly targets additions/modifications on the `RIGHT` side, and deleted code/files on the `LEFT` side.
+4. **Draft Review Batching**: Submits all line comments and the summary report as a single atomic GitHub Review, preventing API rate-limiting and developer email spam.
+5. **Self-Correcting Developer Feedback Memory**: Hooks into comment webhook threads. When developers accept, reject, or dispute review comments, it registers their sentiment in the SQLite database and automatically suppresses/downgrades matching findings in future reviews.
+6. **Docker Storage Optimization**: Docker image uses CPU-only PyTorch packages (`--index-url https://download.pytorch.org/whl/cpu`) reducing container footprint by **1.5 GB+**. Hugging Face models are cached in a persistent volume directory (`./data/huggingface`) to prevent re-downloads.
+7. **Interactive Dashboard & Analytics**: Embedded HTML/CSS landing page serving system stats, setup configurations, and SQLite-backed review historical runs.
 
 ---
 
@@ -80,30 +80,30 @@ sequenceDiagram
 ```text
 app/
 ├── api/
-│   ├── webhooks.py         # Webhook receiver & signature validation
-│   └── dashboard.py        # Analytics & indexing endpoints
+│   ├── webhooks.py         # Webhook signature validation & background router
+│   └── dashboard.py        # Analytics metrics & index trigger endpoints
 ├── config/
-│   └── settings.py         # Config loading & schema verification
+│   └── settings.py         # Configuration settings loadable from .env
 ├── db/
-│   └── session.py          # SQLAlchemy local session
+│   └── session.py          # SQLite database connection session
 ├── github/
-│   └── client.py           # Async HTTP Client for GitHub
+│   └── client.py           # Async HTTP Client for GitHub REST APIs
 ├── models/
-│   ├── database.py         # SQLite models (logs, findings, feedback)
-│   └── schemas.py          # Pydantic webhook & response schemas
+│   ├── database.py         # SQLite tables (logs, findings, developer feedback)
+│   └── schemas.py          # Pydantic schemas (validations, structured AI outputs)
 ├── prompts/
-│   ├── review_prompts.py   # File review prompts
-│   └── summary_prompts.py  # Summary prompts
+│   ├── review_prompts.py   # Code review guidelines (Security, Perf, Maintainability)
+│   └── summary_prompts.py  # Report format & scores prompts
 ├── rag/
-│   ├── indexer.py          # Code file chunking & database insertion
-│   └── retriever.py        # Similarity search queries
+│   ├── indexer.py          # Code file chunking & ChromaDB indexing
+│   └── retriever.py        # Semantic similarity convention searcher
 ├── services/
-│   ├── analytics_service.py
-│   ├── gemini_service.py
-│   ├── github_service.py
-│   └── slack_service.py
-└── main.py                 # FastAPI application root & embedded landing page
-tests/                      # Comprehensive pytest suites
+│   ├── analytics_service.py # Database aggregators & sentiment classifiers
+│   ├── gemini_service.py   # OpenRouter client wrappers & JSON parses
+│   ├── github_service.py   # Diff mapping & dual-side comment placing
+│   └── slack_service.py    # Formatting & posting Slack block messages
+└── main.py                 # FastAPI application root & landing page HTML
+tests/                      # pytest suites
 ```
 
 ---
@@ -113,7 +113,7 @@ tests/                      # Comprehensive pytest suites
 ### Prerequisites
 - Python 3.12+
 - Git
-- Google Gemini API Key
+- OpenRouter API Key
 - GitHub Personal Access Token (PAT) with `repo` scope
 
 ### 1. Local Setup
@@ -125,7 +125,7 @@ tests/                      # Comprehensive pytest suites
    ```bash
    python -m venv venv
    # On Windows:
-   venv\Scripts\activate
+   .\venv\Scripts\Activate.ps1
    # On Linux/macOS:
    source venv/bin/activate
    ```
@@ -135,7 +135,7 @@ tests/                      # Comprehensive pytest suites
    ```
 4. Create a `.env` file from the example:
    ```bash
-   cp .env.example .env
+   copy .env.example .env
    ```
 5. Update `.env` variables with your credentials (API keys, GitHub tokens, webhook secret).
 
@@ -151,32 +151,43 @@ To receive GitHub webhooks locally:
 ```bash
 ngrok http 8000
 ```
-Copy the forwarding HTTPS URL (e.g. `https://random-subdomain.ngrok-free.app`) and append `/api/v1/webhooks/github` as your payload URL in GitHub repository settings.
+Copy the forwarding HTTPS URL (e.g. `https://xxxx-xxxx.ngrok-free.app`) and append `/api/v1/webhooks/github` as your payload URL in GitHub repository settings.
 
-### 4. Indexing a Codebase for RAG
+### 4. Indexing Your Codebase for RAG
 To initialize the RAG vector store for your repository:
+```bash
+python run_indexer.py
+```
+Or trigger it via curl:
 ```bash
 curl -X POST "http://localhost:8000/api/v1/indexer/index" \
      -H "Content-Type: application/json" \
-     -d '{"repo_name": "owner/repo", "local_path": "/path/to/local/repo"}'
+     -d '{"repo_name": "rejoy2004-rgb/ai-code-reviewer", "local_path": "C:/path/to/cloned/repo"}'
 ```
 
 ---
 
 ## 🐳 Running with Docker
 
-1. Build and launch containers:
+1. **Build and start container**:
    ```bash
    docker-compose up -d --build
    ```
-2. The database and ChromaDB vector files will persist in the `./data` volume.
+2. **Index files inside Docker**:
+   Since the app is containerized, `/app` points to the workspace root. Index it by running:
+   ```bash
+   curl -X POST "http://localhost:8000/api/v1/indexer/index" \
+        -H "Content-Type: application/json" \
+        -d '{"repo_name": "rejoy2004-rgb/ai-code-reviewer", "local_path": "/app"}'
+   ```
+3. SQLite database, vector logs, and Hugging Face model weights will persist on your host disk under the `./data` directory.
 
 ---
 
 ## 🧪 Running Tests
-Run pytest to verify the entire system including unit tests, API tests, and Mock GitHub workflow loops:
+Run pytest to verify the entire system including unit tests, API tests, and mock workflow loops:
 ```bash
-pytest
+$env:PYTHONPATH="."; pytest tests/
 ```
 
 ---

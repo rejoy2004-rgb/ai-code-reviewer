@@ -108,6 +108,87 @@ async def fetch_pr_metadata_node(state: PRReviewState) -> Dict[str, Any]:
         return {"status": "failed", "errors": state.get("errors", []) + [f"Fetch PR metadata failed: {str(e)}"]}
 
 
+def should_exclude_file(filename: str) -> bool:
+    """
+    Returns True if the file should be excluded from AI review (e.g. dependencies, lock files, binary files, or caches).
+    """
+    # Normalize path separators
+    filename = filename.replace("\\", "/").lower()
+    
+    # Common dependency, cache, and build directories
+    exclude_dirs = [
+        "venv/",
+        ".venv/",
+        "env/",
+        ".env/",
+        "node_modules/",
+        "bower_components/",
+        "dist/",
+        "build/",
+        "target/",
+        "out/",
+        "bin/",
+        "obj/",
+        "__pycache__/",
+        ".pytest_cache/",
+        ".coverage",
+        "htmlcov/",
+        ".git/",
+        ".github/",
+        ".vscode/",
+        ".idea/",
+        "data/chromadb/",
+        "data/db/",
+    ]
+    
+    # Check if the filename starts with or contains any of the exclude directories
+    for d in exclude_dirs:
+        if filename.startswith(d) or f"/{d}" in filename:
+            return True
+            
+    # File name patterns or exact matches
+    exclude_files = {
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "poetry.lock",
+        "pipfile.lock",
+        "composer.lock",
+        "cargo.lock",
+        "gemfile.lock",
+        ".env",
+        ".env.local",
+        ".env.development",
+        ".env.test",
+        ".env.production",
+    }
+    
+    # Check exact match on basename
+    basename = filename.split("/")[-1]
+    if basename in exclude_files:
+        return True
+        
+    # File extensions to exclude (binaries, database files, images, etc.)
+    exclude_extensions = {
+        # Databases & Binary data
+        ".db", ".sqlite", ".sqlite3", ".bin", ".dat", ".pkl", ".joblib",
+        # Images
+        ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".webp", ".pdf",
+        # Zip/tar archives
+        ".zip", ".tar", ".gz", ".tgz", ".rar", ".7z",
+        # Fonts
+        ".woff", ".woff2", ".ttf", ".eot", ".otf",
+        # Local state/cache/compiled
+        ".pyc", ".pyo", ".pyd", ".class", ".o", ".a", ".so", ".dll", ".exe"
+    }
+    
+    # Check extension match
+    if any(filename.endswith(ext) for ext in exclude_extensions):
+        return True
+        
+    return False
+
+
 async def fetch_changed_files_node(state: PRReviewState) -> Dict[str, Any]:
     """
     Parses the patches from changed files and maps diff offsets.
@@ -118,9 +199,23 @@ async def fetch_changed_files_node(state: PRReviewState) -> Dict[str, Any]:
 
     try:
         changed_files = state.get("changed_files", [])
-        diff_map = await github_service.get_pr_diff_map(changed_files)
+        
+        # Filter files to exclude dependencies, lock files, binary/data files, and caches
+        filtered_files = []
+        excluded_count = 0
+        for f in changed_files:
+            filename = f.get("filename", "")
+            if should_exclude_file(filename):
+                excluded_count += 1
+            else:
+                filtered_files.append(f)
+                
+        if excluded_count > 0:
+            logger.info(f"Filtered out {excluded_count} dependency/binary/cache/lock files from review.")
+
+        diff_map = await github_service.get_pr_diff_map(filtered_files)
         logger.info(f"Parsed diffs for {len(diff_map)} files.")
-        return {"diff_map": diff_map}
+        return {"diff_map": diff_map, "changed_files": filtered_files}
     except Exception as e:
         logger.error(f"Error parsing file diffs: {e}")
         return {"status": "failed", "errors": state.get("errors", []) + [f"Fetch changed files failed: {str(e)}"]}

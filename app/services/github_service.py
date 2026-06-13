@@ -82,23 +82,46 @@ class GitHubService:
                 continue
 
             # Check if line is valid (part of the diff changes)
-            valid_line = get_closest_valid_line(target_line, parsed_diff.added_lines)
-            
-            if valid_line:
-                # If we had to relocate the comment, add a note
-                final_body = comment_body
-                if valid_line != target_line:
-                    final_body = f"*(Comment shifted from line {target_line} to {valid_line} to align with changes)*\n\n" + comment_body
-                
+            # 1. Match exactly on RIGHT side (additions/modifications)
+            if target_line in parsed_diff.added_lines:
                 valid_comments.append({
                     "path": file_path,
-                    "line": valid_line,
-                    "body": final_body,
+                    "line": target_line,
+                    "body": comment_body,
                     "side": "RIGHT"
                 })
+            # 2. Match exactly on LEFT side (deletions)
+            elif target_line in parsed_diff.deleted_lines:
+                valid_comments.append({
+                    "path": file_path,
+                    "line": target_line,
+                    "body": comment_body,
+                    "side": "LEFT"
+                })
             else:
-                # Could not find a nearby line in diff, fallback
-                unplaced_findings.append(finding)
+                # 3. Try relocating to closest added line (RIGHT)
+                valid_line_right = get_closest_valid_line(target_line, parsed_diff.added_lines)
+                if valid_line_right:
+                    final_body = f"*(Comment shifted from line {target_line} to {valid_line_right} to align with changes)*\n\n" + comment_body
+                    valid_comments.append({
+                        "path": file_path,
+                        "line": valid_line_right,
+                        "body": final_body,
+                        "side": "RIGHT"
+                    })
+                else:
+                    # 4. Try relocating to closest deleted line (LEFT)
+                    valid_line_left = get_closest_valid_line(target_line, parsed_diff.deleted_lines)
+                    if valid_line_left:
+                        final_body = f"*(Comment shifted from line {target_line} to {valid_line_left} to align with deletion)*\n\n" + comment_body
+                        valid_comments.append({
+                            "path": file_path,
+                            "line": valid_line_left,
+                            "body": final_body,
+                            "side": "LEFT"
+                        })
+                    else:
+                        unplaced_findings.append(finding)
 
         # If there are findings we couldn't place on specific lines, append them to the overall summary
         final_summary = summary
@@ -117,7 +140,7 @@ class GitHubService:
             f.get("severity") == "high" and f.get("category") == "security" 
             for f in findings
         )
-        event_type = "REQUEST_CHANGES" if has_high_security_issue else "COMMENT"
+        event_type = "COMMENT"
 
         # Submit via GitHub review API
         endpoint = f"repos/{owner}/{repo}/pulls/{pr_number}/reviews"
