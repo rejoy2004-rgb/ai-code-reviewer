@@ -1,3 +1,4 @@
+import os
 import hmac
 import hashlib
 import logging
@@ -19,7 +20,7 @@ class GitHubAPIException(Exception):
 
 class GitHubClient:
     def __init__(self, token: Optional[str] = None):
-        self.token = token or settings.GITHUB_TOKEN
+        self.token = token or settings.GITHUB_TOKEN or os.environ.get("GITHUB_TOKEN", "")
         self.base_url = "https://api.github.com"
         self.headers = {
             "Accept": "application/vnd.github+json",
