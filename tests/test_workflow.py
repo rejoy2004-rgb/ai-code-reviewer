@@ -81,3 +81,33 @@ async def test_review_code_node():
         
         assert len(result["raw_findings"]) == 1
         assert result["raw_findings"][0].severity == "medium"
+
+
+@pytest.mark.asyncio
+async def test_fetch_changed_files_node_filtering():
+    state = {
+        "changed_files": [
+            {"filename": "app/main.py", "patch": "@@ -1 +1 @@"},
+            {"filename": "venv/lib/python3.12/site-packages/httpx/__init__.py", "patch": "@@ -1 +1 @@"},
+            {"filename": "package-lock.json", "patch": "@@ -1 +1 @@"},
+            {"filename": "data/reviews.db", "patch": "@@ -1 +1 @@"},
+            {"filename": "images/screenshot.png", "patch": "@@ -1 +1 @@"},
+        ],
+        "status": "active",
+        "errors": []
+    }
+    
+    with patch("app.workflows.pr_workflow.github_service.get_pr_diff_map", new_callable=AsyncMock) as mock_diff_map:
+        mock_diff_map.return_value = {"app/main.py": MagicMock()}
+        
+        result = await fetch_changed_files_node(state)
+        
+        # Ensure only the non-excluded file was processed
+        mock_diff_map.assert_called_once()
+        called_args = mock_diff_map.call_args[0][0]
+        assert len(called_args) == 1
+        assert called_args[0]["filename"] == "app/main.py"
+        
+        # Ensure state contains filtered list
+        assert len(result["changed_files"]) == 1
+        assert result["changed_files"][0]["filename"] == "app/main.py"

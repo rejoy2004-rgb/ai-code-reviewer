@@ -14,10 +14,12 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("app.main")
-
+print("testing AI reviewer")
 # Initialize database
 try:
     init_db()
+    print("starting server")
+    print("review trigger")
     logger.info("Database initialized successfully.")
     print("triggering AI reviewer")
 except Exception as e:
