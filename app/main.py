@@ -21,6 +21,7 @@ try:
     print("starting server")
     print("review trigger")
     logger.info("Database initialized successfully.")
+    print("triggering AI reviewer")
 except Exception as e:
     logger.error(f"Database initialization failed: {e}")
 
