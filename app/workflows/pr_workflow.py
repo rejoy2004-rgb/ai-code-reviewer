@@ -450,13 +450,13 @@ async def store_review_memory_node(state: PRReviewState) -> Dict[str, Any]:
         record = db.query(ReviewRecord).filter(ReviewRecord.id == db_id).first()
         if record:
             status = state.get("status", "completed")
-            record.status = status
+            record.status = status  # type: ignore
             
             if status == "completed":
-                record.score = state.get("score")
-                record.risk_score = state.get("risk_score")
-                record.confidence_score = state.get("confidence_score")
-                record.summary = state.get("summary_markdown")
+                record.score = state.get("score")  # type: ignore
+                record.risk_score = state.get("risk_score")  # type: ignore
+                record.confidence_score = state.get("confidence_score")  # type: ignore
+                record.summary = state.get("summary_markdown")  # type: ignore
                 
                 # Write line-by-line findings to db
                 for f in state.get("filtered_findings", []):

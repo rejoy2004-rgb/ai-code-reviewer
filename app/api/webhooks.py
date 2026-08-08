@@ -1,3 +1,4 @@
+import typing
 import logging
 import asyncio
 from fastapi import APIRouter, Request, Header, HTTPException, BackgroundTasks, Depends
@@ -17,10 +18,28 @@ router = APIRouter()
 async def run_review_workflow(payload: dict):
     """Asynchronous background task to run the LangGraph PR review."""
     logger.info("Executing LangGraph review workflow in background...")
-    initial_state = {
+    from app.workflows.state import PRReviewState
+    initial_state: PRReviewState = {
         "webhook_payload": payload,
         "errors": [],
-        "status": "pending"
+        "status": "pending",
+        "repo_full_name": "",
+        "pr_number": 0,
+        "commit_sha": "",
+        "pr_title": "",
+        "pr_description": "",
+        "pr_author": "",
+        "pr_html_url": "",
+        "changed_files": [],
+        "diff_map": {},
+        "rag_contexts": {},
+        "raw_findings": [],
+        "filtered_findings": [],
+        "score": 0.0,
+        "risk_score": 0.0,
+        "confidence_score": 0.0,
+        "summary_markdown": "",
+        "db_record_id": None
     }
     try:
         await review_workflow.ainvoke(initial_state)

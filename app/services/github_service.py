@@ -144,7 +144,7 @@ class GitHubService:
 
         # Submit via GitHub review API
         endpoint = f"repos/{owner}/{repo}/pulls/{pr_number}/reviews"
-        payload = {
+        payload: dict[str, Any] = {
             "body": final_summary,
             "event": event_type,
             "commit_id": commit_sha
