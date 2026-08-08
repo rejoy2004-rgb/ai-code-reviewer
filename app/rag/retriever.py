@@ -73,7 +73,7 @@ class RepositoryRetriever:
                 query_text
             )
 
-            where_clause = {}
+            where_clause: dict[str, Any] = {}
 
             if file_filter:
                 where_clause["file_path"] = file_filter
@@ -86,18 +86,23 @@ class RepositoryRetriever:
 
             retrieved = []
 
+            docs = results.get("documents")
+            meta = results.get("metadatas")
+            dists = results.get("distances")
+
             if (
-                results
-                and results.get("documents")
-                and len(results["documents"]) > 0
+                docs is not None
+                and meta is not None
+                and len(docs) > 0
+                and len(meta) > 0
             ):
 
-                documents = results["documents"][0]
-                metadatas = results["metadatas"][0]
+                documents = docs[0]
+                metadatas = meta[0]
 
                 distances = (
-                    results["distances"][0]
-                    if "distances" in results
+                    dists[0]
+                    if dists is not None
                     else [0.0] * len(documents)
                 )
 

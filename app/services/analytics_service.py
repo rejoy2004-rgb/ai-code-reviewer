@@ -120,7 +120,7 @@ class AnalyticsService:
         elif any(w in lower_body for w in ["no", "not"]):
             action = "rejected"
             
-        feedback.action_taken = action
+        feedback.action_taken = action  # type: ignore
         db.add(feedback)
         db.commit()
         db.refresh(feedback)
